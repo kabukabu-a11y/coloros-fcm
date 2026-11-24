@@ -18,7 +18,7 @@ After a fix, a GCM heartbeat broadcast (MCS_HEARTBEAT) wakes the push chain.
 
 ## Installation
 
-1. Download `dist/ColorOS-FCM-0.1.3.zip`
+1. Download `dist/ColorOS-FCM-0.1.4.zip`
 2. Shevery → Modules → Install from ZIP
 3. Apply the Access mode settings above, then run the module card's Action once
 
@@ -87,7 +87,7 @@ Module format and the "guardian" design follow Berry-FCM (a shell port of Origin
 
 ## インストール
 
-1. `dist/ColorOS-FCM-0.1.3.zip` をダウンロード
+1. `dist/ColorOS-FCM-0.1.4.zip` をダウンロード
 2. Shevery → Modules → Install from ZIP で入れる
 3. 上記の Access mode 設定をして、モジュールカードの Action を一度実行
 

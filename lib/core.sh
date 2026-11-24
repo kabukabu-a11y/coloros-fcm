@@ -104,9 +104,15 @@ c_restric_off() {
     settings put secure google_restric_info 0 >/dev/null 2>&1
 }
 
-# Doze whitelist (deviceidle). dumpsys prints one package per line.
+# Doze whitelist (deviceidle). `dumpsys deviceidle whitelist` prints
+# `system,<pkg>,<uid>` / `user,<pkg>,<uid>` lines — never a bare package
+# name (the full `dumpsys deviceidle` dump prints " <pkg>" with a leading
+# space). An exact-line match therefore can never succeed; match the
+# package name as a field instead. Confirmed against AOSP
+# DeviceIdleController.dump() (whitelist branch prints "system,"/"user,"
+# + pkg + "," + uid).
 c_whitelisted() {
-    dumpsys deviceidle whitelist 2>/dev/null | grep -qx "$1"
+    dumpsys deviceidle whitelist 2>/dev/null | grep -qE "(^|[ ,])$1(,|$)"
 }
 
 c_whitelist_add() {
