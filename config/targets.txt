@@ -1,0 +1,5 @@
+# Guardian targets besides GMS (com.google.android.gms is always guarded
+# and cannot be removed). One package name per line.
+# Examples:
+# org.telegram.messenger
+# com.google.android.gm

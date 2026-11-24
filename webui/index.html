@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ColorOS-FCM</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font-family: sans-serif; background:#101216; color:#e8eaed; padding:16px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:#9aa0a6; font-size:12px; margin-bottom:16px; }
+  .row { display:flex; align-items:center; gap:10px; background:#1a1d23; border-radius:12px; padding:12px; margin-bottom:8px; }
+  .dot { width:12px; height:12px; border-radius:50%; background:#5f6368; flex:none; }
+  .ok { background:#34a853; } .bad { background:#ea4335; } .warn { background:#fbbc04; }
+  .pkg { font-size:13px; word-break:break-all; }
+  .meta { color:#9aa0a6; font-size:12px; }
+  button { background:#2b2f36; color:#e8eaed; border:1px solid #3c4043; border-radius:10px; padding:10px 14px; font-size:14px; margin:0 8px 8px 0; }
+  button:active { background:#3c4043; }
+  #log { white-space:pre-wrap; font-size:12px; color:#c8ccd1; background:#0b0c0e; border-radius:12px; padding:12px; min-height:40px; }
+</style>
+</head>
+<body>
+<h1>ColorOS-FCM Guardian</h1>
+<div class="sub">shell-only / uid 2000 — 状態は直近のチェック（Action または service 実行時）の保存結果です</div>
+
+<div id="summary">
+  <div class="row"><span class="dot" id="d-restric"></span><div><div>ColorOS GMS 制限 (google_restric_info)</div><div class="meta" id="m-restric">未取得</div></div></div>
+  <div class="row"><span class="dot" id="d-gcm"></span><div><div>GcmService</div><div class="meta" id="m-gcm">未取得</div></div></div>
+</div>
+<div id="targets"></div>
+
+<div style="margin:14px 0 6px">
+  <button id="btn-check">再チェック</button>
+  <button id="btn-fix">一括修復</button>
+</div>
+<div id="log">state/last-check.json を読み込み中…</div>
+
+<script>
+var MOD = '..';
+function setDot(id, cls, metaId, text) {
+  document.getElementById(id).className = 'dot ' + cls;
+  if (metaId) document.getElementById(metaId).textContent = text;
+}
+function render(j) {
+  setDot('d-restric', j.restric_info === '0' ? 'ok' : 'bad', 'm-restric',
+    j.restric_info === '0' ? '0 = 制限オフ（正常）' : j.restric_info + ' = 制限あり');
+  setDot('d-gcm', j.gcm_alive ? 'ok' : 'bad', 'm-gcm', j.gcm_alive ? '稼働中' : '応答なし');
+  var html = '';
+  (j.targets || []).forEach(function (t) {
+    var cls = t.stopped === 'missing' ? 'warn' : (t.stopped ? 'bad' : 'ok');
+    var label = t.stopped === 'missing' ? '未インストール' : (t.stopped ? 'stopped=true' : 'stopped=false');
+    html += '<div class="row"><span class="dot ' + cls + '"></span><div><div class="pkg">' +
+      t.pkg + '</div><div class="meta">' + label + ' · Doze whitelist: ' +
+      (t.whitelisted ? '登録済み' : '未登録') + '</div></div></div>';
+  });
+  document.getElementById('targets').innerHTML = html;
+  document.getElementById('log').textContent = 'boot_count: ' + j.boot_count;
+}
+function load() {
+  fetch(MOD + '/state/last-check.json', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(render)
+    .catch(function () {
+      document.getElementById('log').textContent =
+        '保存済みチェック結果を読めませんでした。モジュールカードの Action を一度実行すると状態が保存されます。';
+    });
+}
+function run(script) {
+  var bridge = window.shellBridge || window.ShellBridge || window.shizukuBridge;
+  if (bridge && typeof bridge.exec === 'function') {
+    document.getElementById('log').textContent = script + ' 実行中…';
+    bridge.exec('sh ' + MOD + '/' + script, function (out) {
+      document.getElementById('log').textContent = out || '(no output)';
+      setTimeout(load, 800);
+    });
+  } else {
+    document.getElementById('log').textContent =
+      'この管理アプリでは WebUI からシェルを実行できません。モジュールカードの Action ボタン、または Shizuku シェルから lib/check.sh / lib/fix.sh を使ってください。';
+  }
+}
+document.getElementById('btn-check').addEventListener('click', function () { run('lib/check.sh'); });
+document.getElementById('btn-fix').addEventListener('click', function () { run('lib/fix.sh'); });
+load();
+</script>
+</body>
+</html>
