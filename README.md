@@ -1,6 +1,6 @@
 # ColorOS-FCM
 
-**FCM push guardian for Chinese ColorOS** — a Shizuku / Shevery ADB module. Shell-only, no root: it runs as the ADB shell identity (uid 2000) and refuses any other uid.
+**FCM push guardian for Chinese ColorOS** — a Shizuku / Shevery ADB module. Shell-only: it runs as the ADB shell identity (uid 2000) — or as uid 0 when Shizuku itself runs in root mode on a rooted device — and refuses any other uid.
 
 Chinese ColorOS kills Google push through three main routes. This module guards all of them with a detect → fix → verify cycle:
 
@@ -12,13 +12,13 @@ After a fix, a GCM heartbeat broadcast (MCS_HEARTBEAT) wakes the push chain.
 
 ## Requirements
 
-- Shevery (or Shizuku-Next) activated via **wireless debugging / ADB** (does not run as root: uid 2000 is required)
+- Shevery (or Shizuku-Next) activated via **wireless debugging / ADB**, or started in **root mode** on a rooted device (uid 2000 or uid 0; other uids are refused)
 - Module settings: **Access mode = Full access** and **Allow background actions** on (needed for the service.sh auto-guard; Safe mode blocks it by design)
 - `unstop` needs Android 13+ (`cmd package`); ColorOS 16/17 qualify
 
 ## Installation
 
-1. Download `dist/ColorOS-FCM-0.1.1.zip`
+1. Download `dist/ColorOS-FCM-0.1.2.zip`
 2. Shevery → Modules → Install from ZIP
 3. Apply the Access mode settings above, then run the module card's Action once
 
@@ -69,7 +69,7 @@ Module format and the "guardian" design follow Berry-FCM (a shell port of Origin
 
 # ColorOS-FCM（日本語）
 
-**中国版 ColorOS 向け FCM プッシュ守護モジュール** —— Shizuku / Shevery の ADB モジュール形式。純 shell のみ、root 不要（ADB の shell uid 2000 で動作し、それ以外の uid は拒否）。
+**中国版 ColorOS 向け FCM プッシュ守護モジュール** —— Shizuku / Shevery の ADB モジュール形式。純 shell のみ（ADB の shell uid 2000 で動作。Shizuku が root モードで動いている場合は uid 0 でも可。それ以外の uid は拒否）。
 
 中国版 ColorOS が Google プッシュを止める経路は主に3つ。本モジュールはその全部を「検出 → 修復 → 再確認」で守る：
 
@@ -81,13 +81,13 @@ Module format and the "guardian" design follow Berry-FCM (a shell port of Origin
 
 ## 要件
 
-- Shevery（または Shizuku-Next）を**無線デバッグ / ADB** で有効化（root では動かない：uid 2000 が前提）
+- Shevery（または Shizuku-Next）を**無線デバッグ / ADB** で有効化（uid 2000 が前提。root 化端末で Shizuku を root モードで起動している場合は uid 0 でも可）
 - モジュール設定：**Access mode = Full access**、**Allow background actions** オン（service.sh の自動守護に必要。Safe モードでは設計上ブロックされる）
 - `unstop` は Android 13+ の `cmd package` が必要（ColorOS 16/17 は充足）
 
 ## インストール
 
-1. `dist/ColorOS-FCM-0.1.1.zip` をダウンロード
+1. `dist/ColorOS-FCM-0.1.2.zip` をダウンロード
 2. Shevery → Modules → Install from ZIP で入れる
 3. 上記の Access mode 設定をして、モジュールカードの Action を一度実行
 

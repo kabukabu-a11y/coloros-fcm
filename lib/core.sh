@@ -1,5 +1,5 @@
 # ColorOS-FCM shared library. Sourced by action.sh / service.sh / lib/*.sh.
-# Shell-only (uid 2000 via Shizuku/Shevery). No root, no binaries, no reflection.
+# Shell-only via Shizuku/Shevery. No binaries, no reflection.
 # Every write is a standard shell command and is counted against FIX_BUDGET.
 
 GMS="com.google.android.gms"
@@ -13,12 +13,14 @@ c_log() { echo "[coloros-fcm] $*"; }
 
 c_head() { echo ""; echo "== $* =="; }
 
-# Only the adb shell identity (uid 2000) is accepted, mirroring the
-# Shizuku module contract: root or app uids are refused.
+# The adb shell identity (uid 2000) is the baseline. When Shizuku
+# itself runs in root mode (rooted device), bridge commands arrive as
+# uid 0 instead; that identity can do everything the shell identity
+# can, so it is accepted too. App uids and other contexts are refused.
 c_identity_guard() {
     _uid="$(id -u 2>/dev/null)"
-    if [ "$_uid" != "2000" ]; then
-        echo "[x] uid=$_uid : Shizuku(ADB) 経由の shell uid 2000 で実行してください"
+    if [ "$_uid" != "2000" ] && [ "$_uid" != "0" ]; then
+        echo "[x] uid=$_uid : Shizuku(ADB) 経由の shell uid 2000、または root モードの Shizuku で実行してください"
         return 1
     fi
     return 0

@@ -5,12 +5,12 @@
 export MODDIR="${MODDIR:-$(cd "$(dirname "$0")" && pwd)}"
 . "$MODDIR/lib/core.sh" || exit 1
 
-echo "ColorOS-FCM Guardian (shell-only / uid 2000)"
+echo "ColorOS-FCM Guardian (shell-only)"
 b_mode="${SHIZUKU_MODULE_MODE:-unknown}"
 c_log "module=${SHIZUKU_MODULE_ID:-coloros_fcm} mode=$b_mode trusted=${SHIZUKU_MODULE_TRUSTED:-?}"
 
 c_identity_guard || exit 1
-c_log "uid=2000(shell) OK · boot_count=$(c_boot_count) · 対象=$(c_load_targets | wc -l | tr -d ' ')件"
+c_log "uid OK · boot_count=$(c_boot_count) · 対象=$(c_load_targets | wc -l | tr -d ' ')件"
 
 sh "$MODDIR/lib/check.sh" || exit 1
 
