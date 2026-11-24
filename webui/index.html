@@ -8,7 +8,8 @@
   :root { color-scheme: dark; }
   body { margin:0; font-family: sans-serif; background:#101216; color:#e8eaed; padding:16px; }
   h1 { font-size:18px; margin:0 0 4px; }
-  .sub { color:#9aa0a6; font-size:12px; margin-bottom:16px; }
+  .sub { color:#9aa0a6; font-size:12px; margin-bottom:12px; }
+  .chip { display:inline-block; font-size:11px; color:#9aa0a6; border:1px solid #3c4043; border-radius:99px; padding:1px 8px; margin-bottom:14px; }
   .row { display:flex; align-items:center; gap:10px; background:#1a1d23; border-radius:12px; padding:12px; margin-bottom:8px; }
   .dot { width:12px; height:12px; border-radius:50%; background:#5f6368; flex:none; }
   .ok { background:#34a853; } .bad { background:#ea4335; } .warn { background:#fbbc04; }
@@ -16,71 +17,240 @@
   .meta { color:#9aa0a6; font-size:12px; }
   button { background:#2b2f36; color:#e8eaed; border:1px solid #3c4043; border-radius:10px; padding:10px 14px; font-size:14px; margin:0 8px 8px 0; }
   button:active { background:#3c4043; }
+  button:disabled { opacity:.4; }
+  #note { display:none; background:#2a2118; border:1px solid #7c5a10; border-radius:12px; padding:12px; font-size:13px; line-height:1.8; margin-bottom:12px; }
   #log { white-space:pre-wrap; font-size:12px; color:#c8ccd1; background:#0b0c0e; border-radius:12px; padding:12px; min-height:40px; }
 </style>
 </head>
 <body>
 <h1>ColorOS-FCM Guardian</h1>
-<div class="sub">shell-only / uid 2000 — 状態は直近のチェック（Action または service 実行時）の保存結果です</div>
+<div class="sub">shell-only / uid 2000</div>
+<span class="chip" id="chip">橋を検出中…</span>
 
-<div id="summary">
-  <div class="row"><span class="dot" id="d-restric"></span><div><div>ColorOS GMS 制限 (google_restric_info)</div><div class="meta" id="m-restric">未取得</div></div></div>
-  <div class="row"><span class="dot" id="d-gcm"></span><div><div>GcmService</div><div class="meta" id="m-gcm">未取得</div></div></div>
-</div>
+<div id="note"></div>
+
+<div class="row"><span class="dot" id="d-restric"></span><div><div>ColorOS GMS 制限 (google_restric_info)</div><div class="meta" id="m-restric">未取得</div></div></div>
+<div class="row"><span class="dot" id="d-gcm"></span><div><div>GcmService</div><div class="meta" id="m-gcm">未取得</div></div></div>
 <div id="targets"></div>
 
 <div style="margin:14px 0 6px">
   <button id="btn-check">再チェック</button>
   <button id="btn-fix">一括修復</button>
 </div>
-<div id="log">state/last-check.json を読み込み中…</div>
+<pre id="log">起動中…</pre>
 
 <script>
-var MOD = '..';
-function setDot(id, cls, metaId, text) {
-  document.getElementById(id).className = 'dot ' + cls;
-  if (metaId) document.getElementById(metaId).textContent = text;
+/* Bridge adaptation layer (same conventions as the Shizuku module
+   ecosystem):
+   sync : window.Shizuku.exec(cmd) / execWithOptions(cmd,optsJson)
+          -> JSON string {exitCode, stdout, stderr}
+          (Shizuku-Next / Shevery; no default cwd, absolute paths)
+   async: window.ShizukuNext.exec(cmd) / execScript(relPath),
+          output via onOutput/onError/onComplete callbacks
+   dead : window.Shizuku exists but exposes no callable methods
+          (manager release builds that stripped the bridge via R8)
+*/
+var BR = { kind:'none', mod:'', dead:false, blocked:false, info:null };
+var $ = function(id){ return document.getElementById(id); };
+var con = $('log');
+function log(s){ con.textContent += (con.textContent ? '\n' : '') + s; }
+function setLog(s){ con.textContent = s; }
+
+function jkeys(o){
+  var ks = [];
+  try { Object.getOwnPropertyNames(o).forEach(function(k){ try { if (typeof o[k] === 'function') ks.push(k); } catch(e){} }); } catch(e){}
+  return ks;
 }
-function render(j) {
+
+function detect(){
+  var S = window.Shizuku, N = window.ShizukuNext, lines = [];
+  if (S) {
+    var sk = jkeys(S);
+    lines.push('[diag] window.Shizuku keys=[' + sk.join(',') + ']');
+    if (typeof S.exec === 'function' || typeof S.execWithOptions === 'function') {
+      BR.kind = 'sync';
+      if (typeof S.getModuleInfo === 'function') {
+        try {
+          var raw = S.getModuleInfo();
+          var info = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+          if (info) {
+            BR.info = info;
+            BR.mod = (typeof info.moduleDir === 'string' && info.moduleDir) ? info.moduleDir
+              : ((typeof info.webRoot === 'string' && info.webRoot) ? String(info.webRoot).replace(/\/webui\/?$/, '') : '');
+            if (info.permissions && info.permissions.webBridge === false) BR.blocked = true;
+            else if (/safe/i.test(String(info.accessMode || info.mode || ''))) BR.blocked = true;
+          }
+        } catch(e){ lines.push('[diag] getModuleInfo 解析失敗: ' + e); }
+      }
+    } else {
+      BR.dead = true;
+      lines.push('[diag] window.Shizuku はあるが呼べるメソッドが 0（管理器 release 版の橋剥離）');
+    }
+  } else {
+    lines.push('[diag] window.Shizuku なし');
+  }
+  if (N && typeof N.exec === 'function' && BR.kind !== 'sync') {
+    BR.kind = 'async';
+    lines.push('[diag] window.ShizukuNext keys=[' + jkeys(N).join(',') + ']');
+    if (typeof N.getModuleDir === 'function') { try { var d = N.getModuleDir(); if (d) BR.mod = d; } catch(e){} }
+  }
+  if (BR.mod) lines.push('[diag] moduleDir=' + BR.mod);
+  return lines;
+}
+
+function syncRun(cmd, opt){
+  return new Promise(function(res){
+    try {
+      var S = window.Shizuku, rj;
+      if (opt && typeof S.execWithOptions === 'function') rj = S.execWithOptions(cmd, JSON.stringify(opt));
+      else rj = S.exec(cmd);
+      var r = (typeof rj === 'string') ? JSON.parse(rj) : rj;
+      res(r && typeof r === 'object' ? r : { exitCode:-1, stdout:String(rj), stderr:'' });
+    } catch(e){ res({ exitCode:-1, stdout:'', stderr:'bridge error: ' + e }); }
+  });
+}
+
+var _q = Promise.resolve();
+function asyncRun(invoke, live){
+  return _q = _q.then(function(){
+    return new Promise(function(res){
+      var N = window.ShizukuNext, out = [], err = [], done = false, timer = null;
+      var pO = N.onOutput, pE = N.onError, pC = N.onComplete;
+      function restore(){ N.onOutput = pO || null; N.onError = pE || null; N.onComplete = pC || null; if (timer) clearTimeout(timer); }
+      function fin(code){ if (done) return; done = true; restore(); res({ exitCode:code, stdout:out.join('\n'), stderr:err.join('\n') }); }
+      N.onOutput = function(t, ty){ if (ty === 'stderr') err.push(t); else out.push(t); if (live) live(t, ty); if (pO) { try { pO(t, ty); } catch(e){} } };
+      N.onError = function(m){ if (pE) { try { pE(m); } catch(e){} } if (!done) { done = true; restore(); res({ exitCode:-1, stdout:out.join('\n'), stderr:String(m) }); } };
+      N.onComplete = function(c){ if (pC) { try { pC(c); } catch(e){} } fin(c); };
+      try { invoke(); } catch(e){ fin(-1); }
+      timer = setTimeout(function(){ if (!done) { err.push('300s timeout'); fin(-1); } }, 300000);
+    });
+  });
+}
+
+function runScript(rel, args){
+  if (BR.kind === 'async') {
+    var p = rel + (args ? ' ' + args : '');
+    return asyncRun(function(){ window.ShizukuNext.execScript(p); });
+  }
+  if (BR.kind === 'sync') {
+    if (!BR.mod) return Promise.resolve({ exitCode:-1, stdout:'', stderr:'moduleDir unknown' });
+    return syncRun('sh "' + BR.mod + '/' + rel + '"' + (args ? ' ' + args : ''), null);
+  }
+  return Promise.resolve(null);
+}
+
+function refused(r){
+  var s = String((r && r.stderr) || '') + ' ' + String((r && r.stdout) || '');
+  return /no shell bridge/i.test(s);
+}
+
+function parseJson(out){
+  var m = String(out || '').match(/JSON: (\{.*\})/);
+  if (m) { try { return JSON.parse(m[1]); } catch(e){} }
+  return null;
+}
+
+function setDot(id, cls, metaId, text){
+  $(id).className = 'dot ' + cls;
+  if (metaId) $(metaId).textContent = text;
+}
+
+function render(j){
+  if (!j) return;
   setDot('d-restric', j.restric_info === '0' ? 'ok' : 'bad', 'm-restric',
     j.restric_info === '0' ? '0 = 制限オフ（正常）' : j.restric_info + ' = 制限あり');
   setDot('d-gcm', j.gcm_alive ? 'ok' : 'bad', 'm-gcm', j.gcm_alive ? '稼働中' : '応答なし');
   var html = '';
-  (j.targets || []).forEach(function (t) {
+  (j.targets || []).forEach(function(t){
     var cls = t.stopped === 'missing' ? 'warn' : (t.stopped ? 'bad' : 'ok');
     var label = t.stopped === 'missing' ? '未インストール' : (t.stopped ? 'stopped=true' : 'stopped=false');
     html += '<div class="row"><span class="dot ' + cls + '"></span><div><div class="pkg">' +
       t.pkg + '</div><div class="meta">' + label + ' · Doze whitelist: ' +
       (t.whitelisted ? '登録済み' : '未登録') + '</div></div></div>';
   });
-  document.getElementById('targets').innerHTML = html;
-  document.getElementById('log').textContent = 'boot_count: ' + j.boot_count;
+  $('targets').innerHTML = html;
 }
-function load() {
-  fetch(MOD + '/state/last-check.json', { cache: 'no-store' })
-    .then(function (r) { return r.json(); })
-    .then(render)
-    .catch(function () {
-      document.getElementById('log').textContent =
-        '保存済みチェック結果を読めませんでした。モジュールカードの Action を一度実行すると状態が保存されます。';
-    });
+
+function xhrText(p){
+  return new Promise(function(res, rej){
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', p, true);
+      x.onload = function(){ if (x.status === 200 || x.status === 0) res(x.responseText); else rej(new Error('HTTP ' + x.status)); };
+      x.onerror = function(){ rej(new Error('XHR error')); };
+      x.send(null);
+    } catch(e){ rej(e); }
+  });
 }
-function run(script) {
-  var bridge = window.shellBridge || window.ShellBridge || window.shizukuBridge;
-  if (bridge && typeof bridge.exec === 'function') {
-    document.getElementById('log').textContent = script + ' 実行中…';
-    bridge.exec('sh ' + MOD + '/' + script, function (out) {
-      document.getElementById('log').textContent = out || '(no output)';
-      setTimeout(load, 800);
-    });
-  } else {
-    document.getElementById('log').textContent =
-      'この管理アプリでは WebUI からシェルを実行できません。モジュールカードの Action ボタン、または Shizuku シェルから lib/check.sh / lib/fix.sh を使ってください。';
-  }
+
+function loadReadonly(){
+  xhrText('../state/last-check.json').then(function(t){
+    try { render(JSON.parse(t)); log('✓ 保存済みのチェック結果を表示しました'); }
+    catch(e){ log('⚠ last-check.json を解析できませんでした'); }
+  }, function(){
+    log('⚠ まだ state/last-check.json がありません。モジュールカードの Action を一度実行すると状態が保存されます');
+  });
 }
-document.getElementById('btn-check').addEventListener('click', function () { run('lib/check.sh'); });
-document.getElementById('btn-fix').addEventListener('click', function () { run('lib/fix.sh'); });
-load();
+
+function busy(b){ $('btn-check').disabled = b; $('btn-fix').disabled = b; }
+
+function showResult(r){
+  if (!r) return null;
+  if (refused(r) && !BR.blocked) enterBlocked();
+  var out = String(r.stdout || ''), es = String(r.stderr || '');
+  if (out) log(out);
+  if (es) log('⚠ stderr:\n' + es);
+  if (!out && !es) log('(exit ' + r.exitCode + ')');
+  var j = parseJson(out);
+  if (j) render(j);
+  return j;
+}
+
+function enterBlocked(){
+  BR.blocked = true;
+  $('chip').textContent = 'Safe · Full access が必要';
+  var n = $('note');
+  n.style.display = 'block';
+  n.innerHTML = 'コマンドが管理器に拒否されました（Safe モード）。<br>モジュール一覧 → ColorOS-FCM の設定 → <b>Access mode = Full access</b> に変更し、<b>Allow background actions</b> もオンにしてから、このページに戻ってください。';
+  busy(true);
+  loadReadonly();
+}
+
+function doCheck(){
+  busy(true); log('▶ check.sh 実行中…');
+  runScript('lib/check.sh').then(function(r){ showResult(r); busy(false); });
+}
+function doFix(){
+  busy(true); log('▶ fix.sh 実行中…');
+  runScript('lib/fix.sh').then(function(r){
+    showResult(r);
+    log('▶ 修復後チェック…');
+    return runScript('lib/check.sh');
+  }).then(function(r){ showResult(r); busy(false); });
+}
+
+$('btn-check').addEventListener('click', doCheck);
+$('btn-fix').addEventListener('click', doFix);
+
+/* ---- startup ---- */
+setLog('');
+detect().forEach(log);
+if (BR.kind === 'sync') {
+  $('chip').textContent = '橋: Shizuku (sync)' + (BR.info && (BR.info.accessMode || BR.info.mode) ? ' · ' + (BR.info.accessMode || BR.info.mode) : '');
+  if (BR.blocked) enterBlocked(); else doCheck();
+} else if (BR.kind === 'async') {
+  $('chip').textContent = '橋: ShizukuNext (async)';
+  doCheck();
+} else {
+  $('chip').textContent = BR.dead ? '只読 · 橋が使えません' : '只読 · 橋なし';
+  var n = $('note');
+  n.style.display = 'block';
+  n.innerHTML = BR.dead
+    ? 'この管理器の release 版では WebUI の橋メソッドが剥離されていて、<b>どのモジュールの WebUI からもコマンドを実行できません</b>（モジュール側の問題ではありません）。<b>Shizuku-Next を v14.0.32 以上に更新</b>すると直る場合があります。それまではモジュールカードの <b>Action</b> ボタンで診断・修復を実行してください（自動守護 service.sh は影響を受けません）。下には保存済みの状態を表示します。'
+    : 'この管理器では WebUI からシェルを実行できません。モジュールカードの <b>Action</b> ボタンで診断・修復を実行してください。下には保存済みの状態を表示します。';
+  busy(true);
+  loadReadonly();
+}
 </script>
 </body>
 </html>
