@@ -15,6 +15,12 @@
   .ok { background:#34a853; } .bad { background:#ea4335; } .warn { background:#fbbc04; }
   .pkg { font-size:13px; word-break:break-all; }
   .meta { color:#9aa0a6; font-size:12px; }
+  .sect { font-size:14px; font-weight:600; margin:18px 0 8px; }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .tag { display:inline-flex; align-items:center; gap:6px; background:#1a1d23; border:1px solid #3c4043; border-radius:99px; padding:5px 11px; font-size:13px; }
+  .tag button { border:none; background:none; color:#9aa0a6; padding:0 2px; margin:0; font-size:15px; }
+  .addrow { display:flex; gap:8px; }
+  .addrow input { flex:1; background:#1a1d23; border:1px solid #3c4043; border-radius:10px; color:#e8eaed; padding:10px 12px; font-size:14px; min-width:0; }
   button { background:#2b2f36; color:#e8eaed; border:1px solid #3c4043; border-radius:10px; padding:10px 14px; font-size:14px; margin:0 8px 8px 0; }
   button:active { background:#3c4043; }
   button:disabled { opacity:.4; }
@@ -37,6 +43,16 @@
   <button id="btn-check">再チェック</button>
   <button id="btn-fix">一括修復</button>
 </div>
+
+<div class="sect">守護対象（通知を守りたいアプリ）</div>
+<div class="tags" id="tagList"></div>
+<div class="addrow">
+  <input id="pkgInput" placeholder="パッケージ名（例: org.telegram.messenger）">
+  <button id="btn-add">追加</button>
+  <button id="btn-reset">リセット</button>
+</div>
+<div class="meta" style="margin:6px 0 14px">GMS は常時対象で外せません。登録したアプリは stopped 化・電池最適化から一緒に守られます。</div>
+
 <pre id="log">起動中…</pre>
 
 <script>
@@ -192,7 +208,70 @@ function loadReadonly(){
   });
 }
 
-function busy(b){ $('btn-check').disabled = b; $('btn-fix').disabled = b; }
+function busy(b){ $('btn-check').disabled = b; $('btn-fix').disabled = b; $('btn-add').disabled = b; $('btn-reset').disabled = b; }
+
+/* ---- guardian target management (lib/targets.sh) ---- */
+var GMS_PKG = 'com.google.android.gms';
+function renderTags(list){
+  var el = $('tagList'); el.innerHTML = '';
+  list.forEach(function(p){
+    var sp = document.createElement('span'); sp.className = 'tag';
+    var tx = document.createElement('span'); tx.textContent = p + (p === GMS_PKG ? ' · 固定' : '');
+    sp.appendChild(tx);
+    if (p !== GMS_PKG && (BR.kind === 'sync' || BR.kind === 'async') && !BR.blocked) {
+      var x = document.createElement('button'); x.textContent = '×';
+      x.addEventListener('click', function(){ removeTarget(p); });
+      sp.appendChild(x);
+    }
+    el.appendChild(sp);
+  });
+  if (!list.length) el.innerHTML = '<span class="meta">（取得できませんでした）</span>';
+}
+function refreshTargets(){
+  if ((BR.kind === 'sync' || BR.kind === 'async') && !BR.blocked) {
+    runScript('lib/targets.sh', 'list').then(function(r){
+      if (!r) { renderTags([]); return; }
+      var list = String(r.stdout || '').split('\n').map(function(s){ return s.trim(); })
+        .filter(function(s){ return /^[A-Za-z0-9._]+$/.test(s); });
+      renderTags(list);
+    });
+  } else {
+    xhrText('../config/targets.txt').then(function(t){
+      var list = String(t).split('\n').map(function(s){ return s.trim(); })
+        .filter(function(s){ return s && s.charAt(0) !== '#'; });
+      if (list.indexOf(GMS_PKG) < 0) list.unshift(GMS_PKG);
+      renderTags(list);
+    }, function(){ renderTags([GMS_PKG]); });
+  }
+}
+function validPkg(p){ return /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(p); }
+function addTarget(){
+  var p = $('pkgInput').value.trim();
+  if (!validPkg(p)) { log('⚠ パッケージ名の形式が正しくありません: ' + p); return; }
+  busy(true); log('▶ targets.sh add ' + p);
+  runScript('lib/targets.sh', 'add ' + p).then(function(r){
+    if (r && r.stdout) log(String(r.stdout).trim());
+    if (r && refused(r) && !BR.blocked) enterBlocked();
+    $('pkgInput').value = '';
+    busy(false); refreshTargets();
+  });
+}
+function removeTarget(p){
+  busy(true); log('▶ targets.sh remove ' + p);
+  runScript('lib/targets.sh', 'remove ' + p).then(function(r){
+    if (r && r.stdout) log(String(r.stdout).trim());
+    busy(false); refreshTargets();
+  });
+}
+function resetTargets(){
+  busy(true); log('▶ targets.sh reset');
+  runScript('lib/targets.sh', 'reset').then(function(r){
+    if (r && r.stdout) log(String(r.stdout).trim());
+    busy(false); refreshTargets();
+  });
+}
+$('btn-add').addEventListener('click', addTarget);
+$('btn-reset').addEventListener('click', resetTargets);
 
 function showResult(r){
   if (!r) return null;
@@ -214,6 +293,7 @@ function enterBlocked(){
   n.innerHTML = 'コマンドが管理器に拒否されました（Safe モード）。<br>モジュール一覧 → ColorOS-FCM の設定 → <b>Access mode = Full access</b> に変更し、<b>Allow background actions</b> もオンにしてから、このページに戻ってください。';
   busy(true);
   loadReadonly();
+  refreshTargets();
 }
 
 function doCheck(){
@@ -237,10 +317,10 @@ setLog('');
 detect().forEach(log);
 if (BR.kind === 'sync') {
   $('chip').textContent = '橋: Shizuku (sync)' + (BR.info && (BR.info.accessMode || BR.info.mode) ? ' · ' + (BR.info.accessMode || BR.info.mode) : '');
-  if (BR.blocked) enterBlocked(); else doCheck();
+  if (BR.blocked) enterBlocked(); else { doCheck(); refreshTargets(); }
 } else if (BR.kind === 'async') {
   $('chip').textContent = '橋: ShizukuNext (async)';
-  doCheck();
+  doCheck(); refreshTargets();
 } else {
   $('chip').textContent = BR.dead ? '只読 · 橋が使えません' : '只読 · 橋なし';
   var n = $('note');
@@ -250,6 +330,7 @@ if (BR.kind === 'sync') {
     : 'この管理器では WebUI からシェルを実行できません。モジュールカードの <b>Action</b> ボタンで診断・修復を実行してください。下には保存済みの状態を表示します。';
   busy(true);
   loadReadonly();
+  refreshTargets();
 }
 </script>
 </body>
