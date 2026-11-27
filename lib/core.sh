@@ -6,7 +6,7 @@ GMS="com.google.android.gms"
 STATE_DIR="$MODDIR/state"
 CONFIG_DIR="$MODDIR/config"
 TARGETS_FILE="$CONFIG_DIR/targets.txt"
-FIX_BUDGET=12
+FIX_BUDGET=16
 _BUDGET_LEFT=$FIX_BUDGET
 
 c_log() { echo "[coloros-fcm] $*"; }
@@ -118,4 +118,38 @@ c_whitelisted() {
 c_whitelist_add() {
     c_spend || return 1
     cmd deviceidle whitelist "+$1" >/dev/null 2>&1
+}
+
+# App standby bucket (UsageStats): 10=active 20=working_set 30=frequent
+# 40=rare 50=restricted. ColorOS demotes unused apps over time, which
+# delays their jobs/alarms; pinning targets to active keeps the push
+# chain responsive. `am get-standby-bucket` prints the bucket number.
+c_bucket() {
+    _b="$(am get-standby-bucket "$1" 2>/dev/null | grep -o '[0-9][0-9]*' | tail -n 1)"
+    case "$_b" in ''|*[!0-9]*) echo -1 ;; *) echo "$_b" ;; esac
+}
+
+c_bucket_label() {
+    case "$1" in
+        5) echo "exempted" ;;
+        10) echo "active" ;;
+        20) echo "working_set" ;;
+        30) echo "frequent" ;;
+        40) echo "rare" ;;
+        45) echo "never" ;;
+        50) echo "restricted" ;;
+        *) echo "unknown($1)" ;;
+    esac
+}
+
+# 5 (exempted, e.g. Doze-whitelisted) is better than 10 (active);
+# both need no pinning.
+c_bucket_ok() {
+    [ "$1" = "5" ] || [ "$1" = "10" ]
+}
+
+c_bucket_pin_active() {
+    c_spend || return 1
+    am set-standby-bucket "$1" active >/dev/null 2>&1
+    [ "$(c_bucket "$1")" = "10" ]
 }

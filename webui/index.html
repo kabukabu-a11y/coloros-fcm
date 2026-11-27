@@ -180,9 +180,10 @@ function render(j){
   (j.targets || []).forEach(function(t){
     var cls = t.stopped === 'missing' ? 'warn' : (t.stopped ? 'bad' : 'ok');
     var label = t.stopped === 'missing' ? '未インストール' : (t.stopped ? 'stopped=true' : 'stopped=false');
+    var bl = {5:'exempted',10:'active',20:'working_set',30:'frequent',40:'rare',45:'never',50:'restricted'}[t.bucket] || ('不明(' + t.bucket + ')');
     html += '<div class="row"><span class="dot ' + cls + '"></span><div><div class="pkg">' +
       t.pkg + '</div><div class="meta">' + label + ' · Doze whitelist: ' +
-      (t.whitelisted ? '登録済み' : '未登録') + '</div></div></div>';
+      (t.whitelisted ? '登録済み' : '未登録') + ' · バケット: ' + bl + '</div></div></div>';
   });
   $('targets').innerHTML = html;
 }

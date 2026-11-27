@@ -25,7 +25,7 @@ fi
 for pkg in $(c_load_targets); do
     if ! c_pkg_installed "$pkg"; then
         echo "[!] $pkg : 未インストール"
-        _st="missing"; _wl="false"
+        _st="missing"; _wl="false"; _bk=-1
     else
         if c_pkg_stopped "$pkg"; then
             echo "[x] $pkg : stopped=true（放送を受け取れません）"
@@ -41,10 +41,14 @@ for pkg in $(c_load_targets); do
             _wl="false"
             echo "    - Doze ホワイトリスト未登録"
         fi
+        _bk="$(c_bucket "$pkg")"
+        if ! c_bucket_ok "$_bk" && [ "$_bk" != "-1" ]; then
+            echo "    - スタンバイバケット: $(c_bucket_label "$_bk")（active ではない）"
+        fi
     fi
     [ "$_j_first" = "1" ] || _j_targets="$_j_targets,"
     _j_first=0
-    _j_targets="$_j_targets{\"pkg\":\"$pkg\",\"stopped\":$_st,\"whitelisted\":$_wl}"
+    _j_targets="$_j_targets{\"pkg\":\"$pkg\",\"stopped\":$_st,\"whitelisted\":$_wl,\"bucket\":$_bk}"
 done
 
 if c_gcm_service_alive; then

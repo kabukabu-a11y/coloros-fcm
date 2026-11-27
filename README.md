@@ -2,11 +2,12 @@
 
 **FCM push guardian for Chinese ColorOS** — a Shizuku / Shevery ADB module. Shell-only: it runs as the ADB shell identity (uid 2000) — or as uid 0 when Shizuku itself runs in root mode on a rooted device — and refuses any other uid.
 
-Chinese ColorOS kills Google push through three main routes. This module guards all of them with a detect → fix → verify cycle:
+Chinese ColorOS kills Google push through four main routes. This module guards all of them with a detect → fix → verify cycle:
 
 1. **Stopped state** — an app marked "stopped" receives no broadcasts, and if GMS itself is stopped the whole FCM chain dies → cleared with `cmd package unstop`, then re-read to verify
 2. **GMS wakelock restriction** — ColorOS blocks GMS from holding wakelocks via the secure setting `google_restric_info` → set to `0` (restriction off)
 3. **Doze battery optimization** — GMS and the guarded apps are kept on the deviceidle whitelist
+4. **App standby bucket demotion** (v0.1.5+) — demoted apps get their jobs and alarms deferred → targets are pinned to the `active` bucket (`am set-standby-bucket`); apps showing `exempted` (5, e.g. via the Doze whitelist) are already above `active` and are left alone (v0.1.6)
 
 After a fix, a GCM heartbeat broadcast (MCS_HEARTBEAT) wakes the push chain.
 
@@ -18,7 +19,7 @@ After a fix, a GCM heartbeat broadcast (MCS_HEARTBEAT) wakes the push chain.
 
 ## Installation
 
-1. Download `dist/ColorOS-FCM-0.1.4.zip`
+1. Download `dist/ColorOS-FCM-0.1.6.zip`
 2. Shevery → Modules → Install from ZIP
 3. Apply the Access mode settings above, then run the module card's Action once
 
@@ -42,7 +43,7 @@ Only GMS is guarded by default. Add apps such as Telegram with `targets.sh add o
 ## Limitations
 
 - Within shell privileges this is a *guardian*: it repairs state after the system breaks it. It cannot hook and disable Hans freezing or `com.oplus.battery` behavior itself — that is what the Root + LSPosed **FCMFix ColorOS** does (preventive). This module is for devices without (or not wanting) root
-- Writes are standard shell commands only, with a budget of 12 commands per fix run
+- Writes are standard shell commands only, with a budget of 16 commands per fix run
 - Problems where FCM servers themselves are unreachable (DNS pollution, blocked ports 5228–5230) are out of scope
 
 ## Layout
@@ -71,11 +72,12 @@ Module format and the "guardian" design follow Berry-FCM (a shell port of Origin
 
 **中国版 ColorOS 向け FCM プッシュ守護モジュール** —— Shizuku / Shevery の ADB モジュール形式。純 shell のみ（ADB の shell uid 2000 で動作。Shizuku が root モードで動いている場合は uid 0 でも可。それ以外の uid は拒否）。
 
-中国版 ColorOS が Google プッシュを止める経路は主に3つ。本モジュールはその全部を「検出 → 修復 → 再確認」で守る：
+中国版 ColorOS が Google プッシュを止める経路は主に4つ。本モジュールはその全部を「検出 → 修復 → 再確認」で守る：
 
 1. **stopped 化**：システムに「已停止」にされたアプリは放送を受け取れず、GMS 本体が stopped になると FCM 経路全体が死ぬ → `cmd package unstop` で解除し、書き込み後に再読して確認
 2. **GMS WakeLock 制限**：ColorOS は secure 設定 `google_restric_info` で GMS の WakeLock 保持を阻む → `0` にして制限オフ（ColorOS 固有の既知設定）
 3. **Doze の電池最適化**：GMS と対象アプリを deviceidle ホワイトリストに維持
+4. **スタンバイバケットの降格**（v0.1.5〜）：降格されるとジョブやアラームが先送りされる → 対象を `active` バケットに固定（`am set-standby-bucket`）。`exempted`（5、ホワイトリスト等で免除）のアプリは active より上の状態なので対象外（v0.1.6）
 
 修復時には GCM ハートビート放送（MCS_HEARTBEAT）でプッシュ経路を叩き起こす。
 
@@ -87,7 +89,7 @@ Module format and the "guardian" design follow Berry-FCM (a shell port of Origin
 
 ## インストール
 
-1. `dist/ColorOS-FCM-0.1.4.zip` をダウンロード
+1. `dist/ColorOS-FCM-0.1.6.zip` をダウンロード
 2. Shevery → Modules → Install from ZIP で入れる
 3. 上記の Access mode 設定をして、モジュールカードの Action を一度実行
 
@@ -111,7 +113,7 @@ sh <MODDIR>/lib/links.sh appdetails <pkg>|battery|bootid
 ## 限界
 
 - shell 権限の範囲でできるのは「止められたら直す」守護まで。ColorOS の Hans 凍結や `com.oplus.battery` の挙動そのものをフックで無効化はできない。それができるのは Root + LSPosed の **FCMFix ColorOS**（予防型）。本モジュールは root を持たない／持ちたくない端末向けの対処
-- 書き込みは標準 shell コマンドのみ、単回修復のコマンド予算は 12 本（超えたら止まる）
+- 書き込みは標準 shell コマンドのみ、単回修復のコマンド予算は 16 本（超えたら止まる）
 - FCM サーバー自体へ繋がらない問題（DNS 汚染、5228–5230 ポート封鎖など）は対象外
 
 ## 構成

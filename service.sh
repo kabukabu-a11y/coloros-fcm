@@ -51,6 +51,13 @@ for pkg in $(c_load_targets); do
                 echo "[$(date '+%F %T')] $pkg added to Doze whitelist"
             fi
         fi
+        _bk="$(c_bucket "$pkg")"
+        if ! c_bucket_ok "$_bk" && [ "$_bk" != "-1" ]; then
+            if c_bucket_pin_active "$pkg"; then
+                FIXED=$((FIXED + 1))
+                echo "[$(date '+%F %T')] $pkg standby bucket pinned to active"
+            fi
+        fi
     fi
     # ledger regardless of outcome: one intervention per package per boot
     : > "$STATE_DIR/recovered_$pkg"

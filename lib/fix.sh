@@ -42,6 +42,15 @@ for pkg in $(c_load_targets); do
             echo "[x] $pkg : ホワイトリスト追加に失敗/未確認"
         fi
     fi
+    _bk="$(c_bucket "$pkg")"
+    if ! c_bucket_ok "$_bk" && [ "$_bk" != "-1" ]; then
+        if c_bucket_pin_active "$pkg"; then
+            echo "[o] $pkg : スタンバイバケットを active に固定（確認済み）"
+            _fixed=$((_fixed + 1))
+        else
+            echo "[x] $pkg : バケット固定に失敗/未確認（現在: $(c_bucket_label "$(c_bucket "$pkg")")）"
+        fi
+    fi
 done
 
 # 3) wake the push chain if anything was wrong or GcmService is down

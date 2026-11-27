@@ -1,9 +1,9 @@
 id=coloros_fcm
 name=ColorOS-FCM
-version=0.1.4
-versionCode=5
+version=0.1.6
+versionCode=7
 author=kabukabu
-description=ColorOS (国行) FCM push guardian: detects and clears the stopped flag on GMS and chosen apps, disables the ColorOS GMS wakelock restriction (google_restric_info), keeps targets on the Doze whitelist and wakes the push chain with GCM heartbeats. Shell-only; runs as the ADB shell identity (uid 2000), or as uid 0 when Shizuku itself runs in root mode.
+description=ColorOS (国行) FCM push guardian: detects and clears the stopped flag on GMS and chosen apps, disables the ColorOS GMS wakelock restriction (google_restric_info), keeps targets on the Doze whitelist, pins their app standby bucket to active and wakes the push chain with GCM heartbeats. Shell-only; runs as the ADB shell identity (uid 2000), or as uid 0 when Shizuku itself runs in root mode.
 webui=webui
 action=action.sh
 usesShellBridge=true
